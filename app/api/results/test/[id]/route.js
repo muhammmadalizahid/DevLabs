@@ -15,7 +15,7 @@ export async function GET(req, { params }) {
 
   let query = supabaseAdmin
     .from('submissions')
-    .select('*, users(name, email, avatar_url)')
+    .select('*, users!student_id(name, email, avatar_url)')
     .eq('test_id', resolvedParams.id)
     .order('submitted_at', { ascending: false });
 

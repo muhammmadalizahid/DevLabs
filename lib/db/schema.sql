@@ -25,6 +25,8 @@ create table if not exists datasets (
   is_platform  boolean default false,
   schema_sql   text not null,
   seed_sql     text not null,
+  storage_path text,
+  table_name   text,
   created_at   timestamptz default now()
 );
 

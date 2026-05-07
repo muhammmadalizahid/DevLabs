@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS departments (
   department_name VARCHAR(100) NOT NULL,
   location VARCHAR(100)
 );
+
 CREATE TABLE IF NOT EXISTS employees (
   id INT PRIMARY KEY,
   name VARCHAR(100) NOT NULL,

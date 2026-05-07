@@ -50,7 +50,7 @@ export default function TestEditPage() {
 
   async function addQuestion() {
     if (!qForm.prompt.trim()) { setError('Question prompt is required'); return; }
-    if (!refResult?.rows) { setError('Run the reference query first to set the expected output'); return; }
+    if (!Array.isArray(refResult?.rows)) { setError('Run the reference query first to set the expected output'); return; }
     setSaving(true); setError('');
     const res = await fetch(`/api/tests/${id}/questions`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },

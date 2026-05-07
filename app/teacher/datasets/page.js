@@ -103,7 +103,7 @@ export default function DatasetsPage() {
               <textarea className="form-input mono" rows={5} placeholder="INSERT INTO employees VALUES (1, 'Alice');"
                 value={form.seed_sql} onChange={e => setForm(f => ({ ...f, seed_sql: e.target.value }))} />
             </div>
-            {uploading && <p className="text-sm text-muted">⚙️ Provisioning MySQL sandbox database… this may take a moment.</p>}
+            {uploading && <p className="text-sm text-muted">⚙️ Creating dataset... converting to CSV and uploading to storage… this may take a moment.</p>}
             {error && <p className="form-error">{error}</p>}
           </div>
         </Modal>

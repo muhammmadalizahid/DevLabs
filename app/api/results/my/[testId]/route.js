@@ -11,7 +11,7 @@ export async function GET(req, { params }) {
 
   const { data } = await supabaseAdmin
     .from('submissions')
-    .select('*, submission_answers(*, questions(prompt, difficulty, points))')
+    .select('*, submission_answers(*, questions(prompt, difficulty, points)), users!student_id(name, email)')
     .eq('test_id', resolvedParams.testId)
     .eq('student_id', user.id)
     .single();

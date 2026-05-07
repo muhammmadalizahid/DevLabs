@@ -1,15 +1,10 @@
 /**
- * Seed platform datasets into Supabase + MySQL sandbox
- * Run with: node scripts/seed-platform-datasets.js
+ * Seed platform datasets into Supabase + SQLite sandboxes
+ * Run with: npm run seed
  */
 import { createClient } from '@supabase/supabase-js';
-import mysql from 'mysql2/promise';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-import 'dotenv/config';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
+import sqlite3 from 'sqlite3';
+import Papa from 'papaparse';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -151,47 +146,132 @@ INSERT INTO order_items VALUES
   },
 ];
 
+async function extractTableToCSV(db, tableName) {
+  /**
+   * Extract a table from SQLite to CSV format
+   */
+  return new Promise((resolve, reject) => {
+    db.all(`SELECT * FROM ${tableName}`, (err, rows) => {
+      if (err) return reject(err);
+      if (!rows || rows.length === 0) return resolve([]);
+      
+      const csv = Papa.unparse({
+        fields: Object.keys(rows[0]),
+        data: rows
+      });
+      resolve(csv);
+    });
+  });
+}
+
+async function uploadDatasetCSV(supabase, datasetId, tableName, csvContent) {
+  /**
+   * Upload CSV to Supabase Storage
+   */
+  const fileName = `${tableName}.csv`;
+  const path = `platform/${datasetId}/${fileName}`;
+  
+  const { data, error } = await supabase.storage
+    .from('datasets')
+    .upload(path, new Blob([csvContent], { type: 'text/csv' }), { upsert: true });
+  
+  if (error) throw new Error(`Upload failed for ${tableName}: ${error.message}`);
+  return path;
+}
+
 async function main() {
   console.log('🌱 Seeding platform datasets...\n');
 
   for (const ds of DATASETS) {
     console.log(`  → ${ds.name}`);
 
-    // Upsert into Supabase
-    const { data, error } = await supabase.from('datasets').upsert(
-      { name: ds.name, description: ds.description, is_platform: true, owner_id: null, schema_sql: ds.schema_sql, seed_sql: ds.seed_sql },
-      { onConflict: 'name', ignoreDuplicates: false }
-    ).select().single();
+    // 1. Upsert into Supabase to get dataset ID
+    const { data: datasetRecord, error: upsertError } = await supabase
+      .from('datasets')
+      .upsert(
+        {
+          name: ds.name,
+          description: ds.description,
+          is_platform: true,
+          owner_id: null,
+          schema_sql: ds.schema_sql,
+          seed_sql: ds.seed_sql
+        }
+      )
+      .select()
+      .single();
 
-    if (error) { console.error(`    ✗ Supabase error: ${error.message}`); continue; }
-
-    // Provision MySQL
-    const dbName = `devlab_ds_${data.id.replace(/-/g, '_')}`;
-    const conn = await mysql.createConnection({
-      host: process.env.MYSQL_HOST || 'localhost',
-      port: parseInt(process.env.MYSQL_PORT || '3306'),
-      user: process.env.MYSQL_USER,
-      password: process.env.MYSQL_PASSWORD,
-      multipleStatements: true,
-    });
-
-    try {
-      await conn.execute(`CREATE DATABASE IF NOT EXISTS \`${dbName}\``);
-      await conn.execute(`USE \`${dbName}\``);
-      await conn.query(`SET FOREIGN_KEY_CHECKS=0`);
-      const [tables] = await conn.execute(`SELECT table_name FROM information_schema.tables WHERE table_schema='${dbName}'`);
-      for (const t of tables) await conn.execute(`DROP TABLE IF EXISTS \`${t.table_name}\``);
-      await conn.query(`SET FOREIGN_KEY_CHECKS=1`);
-      await conn.query(ds.schema_sql);
-      await conn.query(ds.seed_sql);
-      console.log(`    ✓ Provisioned ${dbName}`);
-    } catch (err) {
-      console.error(`    ✗ MySQL error: ${err.message}`);
-    } finally {
-      await conn.end();
+    if (upsertError) {
+      console.error(`    ✗ Supabase error: ${upsertError.message}`);
+      continue;
     }
 
-    // Seed practice problems for employees dataset
+    // 2. Create temporary SQLite database
+    let db;
+    try {
+      db = new sqlite3.Database(':memory:');
+      
+      // Execute schema SQL
+      const schemaStatements = ds.schema_sql
+        .split(';')
+        .map(s => s.trim())
+        .filter(s => s.length > 0);
+      
+      for (const statement of schemaStatements) {
+        await new Promise((resolve, reject) => {
+          db.run(statement, (err) => {
+            if (err) reject(new Error(`Schema error: ${err.message}`));
+            else resolve();
+          });
+        });
+      }
+
+      // Execute seed SQL
+      const seedStatements = ds.seed_sql
+        .split(';')
+        .map(s => s.trim())
+        .filter(s => s.length > 0);
+      
+      for (const statement of seedStatements) {
+        await new Promise((resolve, reject) => {
+          db.run(statement, (err) => {
+            if (err) reject(new Error(`Seed error: ${err.message}`));
+            else resolve();
+          });
+        });
+      }
+
+      console.log(`    ✓ Created SQLite database with schema and seed data`);
+
+      // 3. Export each table to CSV and upload to Supabase Storage
+      const tableNames = ds.schema_sql.match(/CREATE TABLE IF NOT EXISTS (\w+)/g)
+        ?.map(s => s.match(/\w+$/)[0])
+        .filter(name => name !== 'NOT');
+
+      if (tableNames && tableNames.length > 0) {
+        for (const tableName of tableNames) {
+          try {
+            const csvContent = await extractTableToCSV(db, tableName);
+            const storagePath = await uploadDatasetCSV(supabase, datasetRecord.id, tableName, csvContent);
+            console.log(`    ✓ Exported ${tableName} to Storage`);
+          } catch (err) {
+            console.error(`    ✗ Failed to export ${tableName}: ${err.message}`);
+          }
+        }
+      }
+
+    } catch (err) {
+      console.error(`    ✗ Database error: ${err.message}`);
+      continue;
+    } finally {
+      if (db) {
+        await new Promise((resolve) => {
+          db.close(resolve);
+        });
+      }
+    }
+
+    // 4. Seed practice problems for Employees dataset
     if (ds.name === 'Employees & Departments') {
       const problems = [
         { title: 'List All Employees', description: 'Write a query to retrieve all employee names and their salaries.', difficulty: 'basic', expected_output: JSON.stringify([{name:'Sarah Chen',salary:'92000.00'},{name:'Ahmed Raza',salary:'87500.00'},{name:'Maria Lopez',salary:'71000.00'},{name:'Tom Baker',salary:'76000.00'},{name:'James Kim',salary:'55000.00'},{name:'Lena Müller',salary:'68000.00'},{name:'Carlos Rivera',salary:'52000.00'},{name:'Priya Singh',salary:'48000.00'}]), solution_sql: 'SELECT name, salary FROM employees;', position: 1 },
@@ -203,7 +283,7 @@ async function main() {
 
       for (const p of problems) {
         await supabase.from('practice_problems').upsert(
-          { ...p, dataset_id: data.id, order_sensitive: false },
+          { ...p, dataset_id: datasetRecord.id, order_sensitive: false },
           { onConflict: 'title', ignoreDuplicates: true }
         );
       }
