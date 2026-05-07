@@ -1,0 +1,31 @@
+{
+  "name": "devlab",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "seed": "node --env-file=.env.local scripts/seed-platform-datasets.js"
+  },
+  "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
+    "@supabase/supabase-js": "^2.105.3",
+    "csv-stringify": "^6.7.0",
+    "exceljs": "^4.4.0",
+    "lucide-react": "^1.14.0",
+    "mysql2": "^3.22.3",
+    "next": "16.2.4",
+    "next-auth": "^4.24.14",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "react-hot-toast": "^2.6.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "eslint": "^9",
+    "eslint-config-next": "16.2.4"
+  }
+}
