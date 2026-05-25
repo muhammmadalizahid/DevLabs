@@ -85,8 +85,8 @@ export default function PracticePage() {
                 <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>No problems found</div>
               ) : problems.map(p => (
                 <button key={p.id} onClick={() => selectProblem(p)}
-                  style={{ width: '100%', padding: '14px 16px', textAlign: 'left', borderBottom: '1px solid var(--border)', background: selected?.id === p.id ? 'var(--accent-light)' : 'transparent', border: 'none', cursor: 'pointer', transition: 'background var(--transition)' }}>
-                  <div style={{ fontWeight: 600, color: selected?.id === p.id ? 'var(--accent)' : 'var(--text-primary)', marginBottom: 4 }}>{p.title}</div>
+                  style={{ width: '100%', padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid var(--border)', background: selected?.id === p.id ? 'var(--accent-light)' : 'transparent', border: 'none', cursor: 'pointer', transition: 'background var(--transition)' }}>
+                  <div style={{ fontWeight: 600, color: selected?.id === p.id ? 'var(--accent)' : 'var(--text-primary)', marginBottom: 3 }}>{p.title}</div>
                   <DifficultyBadge difficulty={p.difficulty} />
                 </button>
               ))}
