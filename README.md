@@ -20,17 +20,58 @@ You can start editing the page by modifying `app/page.js`. The page auto-updates
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-## Learn More
+## DevLab Quickstart
 
-To learn more about Next.js, take a look at the following resources:
+This repository includes additional tools and services for local development and testing beyond a vanilla Next.js app.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Local development
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. Copy `.env.example` to `.env.local` and fill credentials.
+2. Install dependencies: `npm ci`.
+3. Start dev server: `npm run dev`.
 
-## Deploy on Vercel
+Tests
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Unit tests: `npm run test:unit`
+- Validator tests: `npm run test:validator`
+- Integration queue tests: `npm run test:integration`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Worker & Redis
+
+To run the execution worker with Redis locally:
+
+```bash
+docker compose up -d
+npm ci
+node scripts/worker-redis.js
+```
+
+Metrics
+
+Prometheus-compatible metrics are exposed at `/api/metrics`.
+
+Docs
+
+See the `docs/` folder for feature-specific guides: `PARTIAL_GRADING.md`, `WORKER_POOL.md`, `ENVIRONMENT.md`, `MYSQL_ADAPTER.md`.
+
+Deployment
+
+- Apply DB migrations in `lib/db/migrations/` before enabling schema-dependent features.
+- To apply migrations locally or to a Postgres instance, set `DATABASE_URL` and run:
+
+```bash
+npm run migrate
+```
+
+- Quick smoke tests (requires dev server running):
+
+```bash
+# scan a test
+TEST_ID=<test-uuid> npm run smoke:plagiarism
+
+# run a simple concurrent load test (defaults target to plagiarism scan URL)
+TARGET_URL=http://localhost:3000/api/plagiarism/scan/<test-id> CONCURRENCY=20 REQS=200 npm run load:test
+```
+
+- Toggle features via environment variables (see `.env.example`).
+

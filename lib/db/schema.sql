@@ -73,6 +73,7 @@ create table if not exists questions (
   dataset_id       uuid references datasets(id) on delete set null,
   order_sensitive  boolean default false,
   points           int default 1,
+  partial_grading  boolean default false,
   position         int not null
 );
 

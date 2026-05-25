@@ -19,9 +19,15 @@ export default function LandingPage() {
 
   useEffect(() => {
     if (status === 'loading') return;
-    if (session?.user?.role === 'teacher') router.replace('/teacher/dashboard');
-    else if (session?.user?.role === 'student') router.replace('/student/dashboard');
-    else if (session && !session.user.role) router.replace('/onboarding');
+    const bootstrapCookie = typeof document !== 'undefined'
+      ? document.cookie.split('; ').find(entry => entry.startsWith('devlab_pending_role='))
+      : null;
+    const bootstrapRole = bootstrapCookie ? decodeURIComponent(bootstrapCookie.split('=')[1]) : null;
+    const effectiveRole = session?.user?.role || bootstrapRole;
+
+    if (effectiveRole === 'teacher') router.replace('/teacher/dashboard');
+    else if (effectiveRole === 'student') router.replace('/student/dashboard');
+    else if (session && !effectiveRole) router.replace('/onboarding');
   }, [session, status, router]);
 
   return (

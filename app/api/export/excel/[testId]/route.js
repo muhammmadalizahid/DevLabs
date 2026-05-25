@@ -13,7 +13,9 @@ export async function GET(req, { params }) {
 
   const { data: test } = await supabaseAdmin.from('tests').select('title').eq('id', resolvedParams.testId).single();
   const { data: submissions } = await supabaseAdmin
-    .from('submissions').select('*, users(name,email)').eq('test_id', resolvedParams.testId)
+    .from('submissions')
+    .select('*, users(name,email), submission_answers(*, questions(id, prompt, points, partial_grading, expected_output))')
+    .eq('test_id', resolvedParams.testId)
     .order('total_score', { ascending: false });
 
   const buffer = await generateExcel(submissions ?? [], test?.title ?? 'Results');

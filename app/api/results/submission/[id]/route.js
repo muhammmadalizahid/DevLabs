@@ -10,7 +10,7 @@ export async function GET(req, { params }) {
 
   const { data: submission } = await supabaseAdmin
     .from('submissions')
-    .select('*, users(name,email,avatar_url), submission_answers(*, questions(prompt,difficulty,points,expected_output,order_sensitive))')
+    .select('*, users(name,email,avatar_url), submission_answers(*, questions(prompt,difficulty,points,expected_output,order_sensitive,partial_grading))')
     .eq('id', params.id).single();
 
   if (!submission) return NextResponse.json({ error: 'Not found' }, { status: 404 });

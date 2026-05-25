@@ -1,45 +1,80 @@
 'use client';
 import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { GraduationCap, BookOpen } from 'lucide-react';
 
 export default function OnboardingPage() {
   const { data: session, update } = useSession();
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState(null);
 
   async function handleSelect(role) {
     setSelected(role);
     setLoading(true);
+    const destination = role === 'teacher' ? '/teacher/dashboard' : '/student/dashboard';
+
+    const setBootstrapRoleCookie = () => {
+      document.cookie = `devlab_pending_role=${role}; Path=/; Max-Age=300; SameSite=Lax`;
+    };
+
+    const navigateToDestination = () => {
+      setBootstrapRoleCookie();
+      window.location.replace(destination);
+    };
+
     try {
       const res = await fetch('/api/user/role', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ role }),
       });
+
       if (res.ok) {
         console.log('[Onboarding] Role updated, refreshing session...');
-        // Refresh session to get the updated role from JWT callback
-        const result = await update();
-        console.log('[Onboarding] Session refreshed:', result);
-        
-        // Wait a brief moment for session to stabilize
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
+        void update({ role }).then(result => {
+          console.log('[Onboarding] Session refreshed:', result);
+        }).catch(error => {
+          console.warn('[Onboarding] Session refresh failed:', error);
+        });
+
         console.log('[Onboarding] Navigating to dashboard for role:', role);
-        // Use window.location for a full page reload to ensure fresh session
-        window.location.href = role === 'teacher' ? '/teacher/dashboard' : '/student/dashboard';
+        navigateToDestination();
       } else {
-        console.error('[Onboarding] Failed to update role:', await res.json());
+        const responseText = await res.text();
+        let responseError = responseText || { status: res.status, statusText: res.statusText };
+
+        try {
+          if (responseText) {
+            responseError = JSON.parse(responseText);
+          }
+        } catch {
+          responseError = responseText || { status: res.status, statusText: res.statusText };
+        }
+
+        if (typeof responseError === 'object' && responseError && Object.keys(responseError).length === 0) {
+          responseError = { status: res.status, statusText: res.statusText };
+        }
+
+        console.warn('[Onboarding] Failed to update role:', responseError);
+
+        if (res.status >= 500 || responseError?.error === 'TypeError: fetch failed') {
+          void update({ role }).catch(error => {
+            console.warn('[Onboarding] Session refresh failed after role update error:', error);
+          });
+          navigateToDestination();
+          return;
+        }
+
         setLoading(false);
         setSelected(null);
       }
     } catch (err) {
       console.error('[Onboarding] Error:', err);
-      setLoading(false);
-      setSelected(null);
+
+      void update({ role }).catch(error => {
+        console.warn('[Onboarding] Session refresh failed after onboarding error:', error);
+      });
+      navigateToDestination();
     }
   }
 

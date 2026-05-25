@@ -59,11 +59,13 @@ export default function StudentResultPage() {
                   <DifficultyBadge difficulty={ans.questions?.difficulty} />
                   <span className="badge badge-neutral">{ans.questions?.points ?? 1} pts</span>
                 </div>
-                {ans.is_correct !== null
-                  ? ans.is_correct
-                    ? <span className="flex-gap" style={{ color: 'var(--success)', fontWeight: 600 }}><CheckCircle size={16}/> Correct</span>
-                    : <span className="flex-gap" style={{ color: 'var(--danger)', fontWeight: 600 }}><XCircle size={16}/> Incorrect</span>
-                  : <span className="text-muted text-sm">Not evaluated</span>}
+                {ans.is_correct !== null ? (
+                  typeof ans.score === 'number' ? (
+                    <span className="flex-gap" style={{ fontWeight: 600 }}>{ans.score} pts{ans.questions?.partial_grading ? ' (partial)' : ''}</span>
+                  ) : (
+                    <span className="text-muted text-sm">Not evaluated</span>
+                  )
+                ) : <span className="text-muted text-sm">Not evaluated</span>}
               </div>
               <p style={{ marginTop: 10, fontWeight: 500 }}>{ans.questions?.prompt}</p>
               {ans.query_text && (

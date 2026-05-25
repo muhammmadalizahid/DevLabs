@@ -1,0 +1,26 @@
+version: '3.8'
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    image: node:18
+    working_dir: /app
+    volumes:
+      - ./:/app
+    command: sh -c "npm install --silent && NODE_ENV=production node scripts/worker-redis.js"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - WORKER_BACKEND=redis
+      - ENABLE_EXECUTION_WORKER=1
+    depends_on:
+      redis:
+        condition: service_healthy

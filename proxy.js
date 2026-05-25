@@ -4,7 +4,8 @@ import { NextResponse } from 'next/server';
 export default withAuth(
   function middleware(req) {
     const { pathname } = req.nextUrl;
-    const role = req.nextauth.token?.role;
+    const pendingRole = req.cookies.get('devlab_pending_role')?.value;
+    const role = req.nextauth.token?.role || pendingRole;
 
     // Redirect to onboarding if no role assigned yet
     if (!role && pathname !== '/onboarding') {

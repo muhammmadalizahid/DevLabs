@@ -100,6 +100,23 @@ export default function TestEditPage() {
                   <span className="text-muted text-sm">Q{i + 1}</span>
                   <DifficultyBadge difficulty={q.difficulty} />
                   <span className="badge badge-neutral">{q.points} pt{q.points !== 1 ? 's' : ''}</span>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 8 }}>
+                    <input type="checkbox" checked={q.partial_grading} onChange={async (e) => {
+                      const enabled = e.target.checked;
+                      // Optimistic UI
+                      setQuestions(prev => prev.map(p => p.id === q.id ? { ...p, partial_grading: enabled } : p));
+                      const res = await fetch(`/api/tests/${id}/questions/${q.id}`, {
+                        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ partial_grading: enabled })
+                      });
+                      if (!res.ok) {
+                        const data = await res.json();
+                        alert('Failed to update: ' + (data?.error || res.statusText));
+                        // revert
+                        setQuestions(prev => prev.map(p => p.id === q.id ? { ...p, partial_grading: !enabled } : p));
+                      }
+                    }} />
+                    <span className="text-xs text-muted">Partial</span>
+                  </label>
                 </div>
                 <p style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{q.prompt}</p>
                 <p className="text-xs text-muted" style={{ marginTop: 4 }}>{(q.expected_output || []).length} expected rows</p>

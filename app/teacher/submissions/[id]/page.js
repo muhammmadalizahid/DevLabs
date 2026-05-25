@@ -57,11 +57,18 @@ export default function SubmissionDetailPage() {
                   <span className="text-muted text-sm">Q{i + 1}</span>
                   <DifficultyBadge difficulty={ans.questions?.difficulty} />
                   <span className="badge badge-neutral">{ans.questions?.points ?? 1} pts</span>
+                  {ans.questions?.partial_grading && (
+                    <span className="badge badge-info" style={{ marginLeft: 6 }}>Partial</span>
+                  )}
                 </div>
                 {ans.is_correct !== null && (
-                  ans.is_correct
-                    ? <span className="flex-gap" style={{ color: 'var(--success)' }}><CheckCircle size={16}/> Correct (+{ans.score})</span>
-                    : <span className="flex-gap" style={{ color: 'var(--danger)' }}><XCircle size={16}/> Incorrect (0)</span>
+                  (typeof ans.score === 'number') ? (
+                    ans.score > 0 ? (
+                      <span className="flex-gap" style={{ color: 'var(--success)' }}><CheckCircle size={16}/> +{ans.score}</span>
+                    ) : (
+                      <span className="flex-gap" style={{ color: 'var(--danger)' }}><XCircle size={16}/> 0</span>
+                    )
+                  ) : null
                 )}
               </div>
               <p style={{ fontWeight: 500, marginBottom: 16 }}>{ans.questions?.prompt}</p>

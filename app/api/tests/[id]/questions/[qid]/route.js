@@ -11,7 +11,7 @@ export async function PATCH(req, { params }) {
   if (user?.role !== 'teacher') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const body = await req.json();
-  const allowed = ['prompt', 'difficulty', 'expected_output', 'dataset_id', 'order_sensitive', 'points', 'position'];
+  const allowed = ['prompt', 'difficulty', 'expected_output', 'dataset_id', 'order_sensitive', 'points', 'position', 'partial_grading'];
   const updates = Object.fromEntries(Object.entries(body).filter(([k]) => allowed.includes(k)));
   const { data, error } = await supabaseAdmin.from('questions').update(updates).eq('id', resolvedParams.qid).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
