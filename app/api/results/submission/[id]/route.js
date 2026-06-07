@@ -6,16 +6,22 @@ import { supabaseAdmin } from '@/lib/db/supabase';
 export async function GET(req, { params }) {
   const session = await getServerSession();
   if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const resolvedParams = await params;
   const { data: user } = await supabaseAdmin.from('users').select('id,role').eq('email', session.user.email).single();
 
   const { data: submission } = await supabaseAdmin
     .from('submissions')
-    .select('*, users(name,email,avatar_url), submission_answers(*, questions(prompt,difficulty,points,expected_output,order_sensitive,partial_grading))')
-    .eq('id', params.id).single();
+    .select('*, tests(classroom_id,classrooms(teacher_id)), users(name,email,avatar_url), submission_answers(*, questions(prompt,difficulty,points,expected_output,order_sensitive))')
+    .eq('id', resolvedParams.id).single();
 
   if (!submission) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (user.role !== 'teacher' && submission.student_id !== user.id)
+  if (user.role === 'teacher') {
+    if (submission.tests?.classrooms?.teacher_id !== user.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+  } else if (submission.student_id !== user.id) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
 
   return NextResponse.json(submission);
 }

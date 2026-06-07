@@ -18,12 +18,42 @@ export async function POST(req, { params }) {
   const { question_id, query_text } = await req.json();
   if (!question_id) return NextResponse.json({ error: 'question_id required' }, { status: 400 });
 
-  // Upsert answer draft
-  const { data, error } = await supabaseAdmin.from('submission_answers').upsert({
-    submission_id: resolvedParams.id,
-    question_id,
-    query_text: query_text ?? '',
-  }, { onConflict: 'submission_id,question_id' }).select().single();
+  // Do not depend on a DB-level unique constraint existing yet; update-or-insert manually.
+  const { data: existing, error: existingError } = await supabaseAdmin
+    .from('submission_answers')
+    .select('id')
+    .eq('submission_id', resolvedParams.id)
+    .eq('question_id', question_id)
+    .order('id', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 });
+
+  let data;
+  let error;
+  if (existing?.id) {
+    const result = await supabaseAdmin
+      .from('submission_answers')
+      .update({ query_text: query_text ?? '' })
+      .eq('id', existing.id)
+      .select()
+      .single();
+    data = result.data;
+    error = result.error;
+  } else {
+    const result = await supabaseAdmin
+      .from('submission_answers')
+      .insert({
+        submission_id: resolvedParams.id,
+        question_id,
+        query_text: query_text ?? '',
+      })
+      .select()
+      .single();
+    data = result.data;
+    error = result.error;
+  }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data);

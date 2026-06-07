@@ -1,32 +1,75 @@
 'use client';
+/* eslint-disable @next/next/no-img-element */
 import Link from 'next/link';
+import { useEffect, useMemo } from 'react';
 import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import {
-  LayoutDashboard, BookOpen, FlaskConical, Users,
-  Database, BarChart2, LogOut, GraduationCap, Code2,
+  LayoutDashboard, FlaskConical, Users,
+  Database, BarChart2, LogOut, Code2,
 } from 'lucide-react';
 
-const teacherNav = [
-  { href: '/teacher/dashboard',  label: 'Dashboard',  icon: LayoutDashboard },
+const teacherBaseNav = [
+  { href: '/teacher/dashboard', label: 'Dashboard', icon: LayoutDashboard, match: (p) => p === '/teacher/dashboard' },
 ];
 
-const studentNav = [
-  { href: '/student/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/student/practice',  label: 'Practice',  icon: Code2 },
+const studentBaseNav = [
+  { href: '/student/dashboard', label: 'Dashboard', icon: LayoutDashboard, match: (p) => p === '/student/dashboard' },
 ];
+
+function classroomIdFromPath(pathname) {
+  const m = pathname.match(/^\/(teacher|student)\/classrooms\/([^/]+)/);
+  return m?.[2] || null;
+}
+
+function buildTeacherClassroomNav(id) {
+  const base = `/teacher/classrooms/${id}`;
+  return [
+    { href: base, label: 'Students', icon: Users, match: (p) => p === base },
+    { href: `${base}/tests`, label: 'Tests', icon: FlaskConical, match: (p) => p.startsWith(`${base}/tests`) || p.startsWith('/teacher/tests/') },
+    { href: `${base}/results`, label: 'Results', icon: BarChart2, match: (p) => p.startsWith(`${base}/results`) || p.startsWith('/teacher/submissions/') },
+  ];
+}
+
+function buildStudentClassroomNav(id) {
+  const testsHref = `/student/classrooms/${id}`;
+  return [
+    { href: testsHref, label: 'Tests', icon: FlaskConical, match: (p) => p.startsWith(testsHref) || p.startsWith('/student/tests/') },
+    { href: '/student/results', label: 'Results', icon: BarChart2, match: (p) => p.startsWith('/student/results') },
+  ];
+}
 
 export default function Sidebar({ classroomId }) {
   const pathname = usePathname();
   const { data: session } = useSession();
   const isTeacher = session?.user?.role === 'teacher';
-  const navItems = isTeacher ? teacherNav : studentNav;
+  const rolePrefix = isTeacher ? 'teacher' : 'student';
+  const storageKey = `devlab:lastClassroom:${rolePrefix}`;
+  const routeClassroomId = classroomIdFromPath(pathname);
+  const savedClassroomId = useMemo(() => {
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem(storageKey);
+  }, [storageKey]);
 
-  const dynamicTeacherNav = classroomId ? [
-    { href: `/teacher/classrooms/${classroomId}`,         label: 'Students',  icon: Users },
-    { href: `/teacher/classrooms/${classroomId}/tests`,   label: 'Tests',     icon: FlaskConical },
-    { href: `/teacher/classrooms/${classroomId}/results`, label: 'Results',   icon: BarChart2 },
-  ] : [];
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (routeClassroomId) {
+      localStorage.setItem(storageKey, routeClassroomId);
+    }
+  }, [routeClassroomId, storageKey]);
+
+  const currentClassroomId = classroomId || routeClassroomId || savedClassroomId;
+  const navItems = isTeacher ? teacherBaseNav : studentBaseNav;
+  const classroomNav = useMemo(() => {
+    if (!currentClassroomId) return [];
+    return isTeacher ? buildTeacherClassroomNav(currentClassroomId) : buildStudentClassroomNav(currentClassroomId);
+  }, [currentClassroomId, isTeacher]);
+
+  const resourcesNav = isTeacher
+    ? [{ href: '/teacher/datasets', label: 'Datasets', icon: Database, match: (p) => p.startsWith('/teacher/datasets') }]
+    : [
+        { href: '/student/practice', label: 'Practice', icon: Code2, match: (p) => p.startsWith('/student/practice') },
+      ];
 
   return (
     <aside className="sidebar">
@@ -37,48 +80,29 @@ export default function Sidebar({ classroomId }) {
 
       <nav className="sidebar-nav">
         <span className="sidebar-section-label">Menu</span>
-        {navItems.map(({ href, label, icon: Icon }) => (
-          <Link
-            key={href}
-            href={href}
-            className={`sidebar-item ${pathname === href ? 'active' : ''}`}
-          >
+        {navItems.map(({ href, label, icon: Icon, match }) => (
+          <Link key={href} href={href} className={`sidebar-item ${match(pathname) ? 'active' : ''}`}>
             <Icon size={18} /> {label}
           </Link>
         ))}
 
-        {isTeacher && dynamicTeacherNav.length > 0 && (
+        {classroomNav.length > 0 && (
           <>
             <span className="sidebar-section-label" style={{ marginTop: 8 }}>Classroom</span>
-            {dynamicTeacherNav.map(({ href, label, icon: Icon }) => (
-              <Link
-                key={href}
-                href={href}
-                className={`sidebar-item ${pathname.startsWith(href) ? 'active' : ''}`}
-              >
+            {classroomNav.map(({ href, label, icon: Icon, match }) => (
+              <Link key={href} href={href} className={`sidebar-item ${match(pathname) ? 'active' : ''}`}>
                 <Icon size={18} /> {label}
               </Link>
             ))}
           </>
         )}
 
-        {isTeacher && (
-          <>
-            <span className="sidebar-section-label" style={{ marginTop: 8 }}>Resources</span>
-            <Link href="/teacher/datasets" className={`sidebar-item ${pathname.startsWith('/teacher/datasets') ? 'active' : ''}`}>
-              <Database size={18} /> Datasets
-            </Link>
-          </>
-        )}
-
-        {!isTeacher && (
-          <>
-            <span className="sidebar-section-label" style={{ marginTop: 8 }}>Learning</span>
-            <Link href="/student/practice" className={`sidebar-item ${pathname.startsWith('/student/practice') ? 'active' : ''}`}>
-              <BookOpen size={18} /> Practice
-            </Link>
-          </>
-        )}
+        <span className="sidebar-section-label" style={{ marginTop: 8 }}>{isTeacher ? 'Resources' : 'Learning'}</span>
+        {resourcesNav.map(({ href, label, icon: Icon, match }) => (
+          <Link key={href} href={href} className={`sidebar-item ${match(pathname) ? 'active' : ''}`}>
+            <Icon size={18} /> {label}
+          </Link>
+        ))}
       </nav>
 
       <div className="sidebar-footer">

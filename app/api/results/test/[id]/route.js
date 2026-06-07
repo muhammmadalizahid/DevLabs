@@ -9,6 +9,12 @@ export async function GET(req, { params }) {
   const resolvedParams = await params;
   const { data: user } = await supabaseAdmin.from('users').select('id,role').eq('email', session.user.email).single();
   if (user?.role !== 'teacher') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const { data: test } = await supabaseAdmin
+    .from('tests')
+    .select('id,classroom_id,classrooms(teacher_id)')
+    .eq('id', resolvedParams.id)
+    .single();
+  if (!test || test.classrooms?.teacher_id !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const url = new URL(req.url);
   const status = url.searchParams.get('status');

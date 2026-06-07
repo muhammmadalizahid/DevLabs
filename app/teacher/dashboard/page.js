@@ -4,7 +4,7 @@ import { useRequireRole } from '@/lib/hooks/useRequireRole';
 import Sidebar from '@/components/Sidebar';
 import Navbar from '@/components/Navbar';
 import Modal from '@/components/Modal';
-import { Plus, Users, FlaskConical, Copy, Check } from 'lucide-react';
+import { Plus, Users, FlaskConical, Copy, Check, EllipsisVertical, Trash2 } from 'lucide-react';
 
 export default function TeacherDashboard() {
   const { session, loading } = useRequireRole('teacher');
@@ -15,6 +15,10 @@ export default function TeacherDashboard() {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(null);
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   useEffect(() => {
     if (!loading) fetchClassrooms();
@@ -49,11 +53,27 @@ export default function TeacherDashboard() {
     setTimeout(() => setCopied(null), 2000);
   }
 
+  async function deleteClassroom() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setDeleteError('');
+    const res = await fetch(`/api/classrooms/${deleteTarget.id}`, { method: 'DELETE' });
+    setDeleting(false);
+    if (res.ok) {
+      setClassrooms(items => items.filter(item => item.id !== deleteTarget.id));
+      setDeleteTarget(null);
+      setOpenMenuId(null);
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setDeleteError(data.error || 'Failed to delete classroom');
+    }
+  }
+
   if (loading) return <div className="flex-center" style={{ height: '100vh' }}><div className="spinner" /></div>;
 
   return (
     <div className="page-layout">
-      <Sidebar />
+      <Sidebar classroomId={classrooms?.[0]?.id} />
       <div className="page-content">
         <Navbar title="My Classrooms" actions={
           <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>
@@ -83,12 +103,48 @@ export default function TeacherDashboard() {
         ) : (
           <div className="grid-2">
             {classrooms.map(c => (
-              <div key={c.id} className="card card-hover" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div key={c.id} className="card card-hover" style={{ display: 'flex', flexDirection: 'column', gap: 16, position: 'relative' }}>
                 <div className="flex-between">
                   <h3 className="truncate">{c.name}</h3>
-                  <button className="btn btn-ghost btn-icon" title="Copy invite code" onClick={() => copyCode(c.invite_code)}>
-                    {copied === c.invite_code ? <Check size={16} style={{ color: 'var(--success)' }} /> : <Copy size={16} />}
-                  </button>
+                  <div className="flex-gap" style={{ position: 'relative' }}>
+                    <button className="btn btn-ghost btn-icon" title="Copy invite code" onClick={() => copyCode(c.invite_code)}>
+                      {copied === c.invite_code ? <Check size={16} style={{ color: 'var(--success)' }} /> : <Copy size={16} />}
+                    </button>
+                    <button
+                      className="btn btn-ghost btn-icon"
+                      title="Classroom actions"
+                      onClick={() => setOpenMenuId(openMenuId === c.id ? null : c.id)}
+                    >
+                      <EllipsisVertical size={16} />
+                    </button>
+                    {openMenuId === c.id && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: 'calc(100% + 6px)',
+                          right: 0,
+                          zIndex: 20,
+                          minWidth: 180,
+                          background: 'var(--surface)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 'var(--radius-md)',
+                          boxShadow: 'var(--shadow-lg)',
+                          padding: 6,
+                        }}
+                      >
+                        <button
+                          className="btn btn-ghost"
+                          style={{ width: '100%', justifyContent: 'flex-start', color: 'var(--error)' }}
+                          onClick={() => {
+                            setDeleteTarget(c);
+                            setOpenMenuId(null);
+                          }}
+                        >
+                          <Trash2 size={14} /> Delete Classroom
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 {c.description && <p className="text-sm">{c.description}</p>}
                 <div className="flex-gap">
@@ -135,6 +191,33 @@ export default function TeacherDashboard() {
           </div>
           {error && <p className="form-error">{error}</p>}
         </form>
+      </Modal>
+
+      <Modal
+        open={!!deleteTarget}
+        onClose={() => {
+          if (!deleting) {
+            setDeleteTarget(null);
+            setDeleteError('');
+          }
+        }}
+        title="Delete Classroom"
+        footer={<>
+          <button className="btn btn-secondary" onClick={() => { setDeleteTarget(null); setDeleteError(''); }} disabled={deleting}>Cancel</button>
+          <button className="btn btn-danger" onClick={deleteClassroom} disabled={deleting}>
+            {deleting ? 'Deleting...' : 'Delete Classroom'}
+          </button>
+        </>}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <p style={{ margin: 0 }}>
+            Delete <strong>{deleteTarget?.name}</strong>? This will remove the classroom and its enrollments.
+          </p>
+          <p className="text-sm text-muted" style={{ margin: 0 }}>
+            Tests, results, and related classroom data may also be affected depending on database relationships.
+          </p>
+          {deleteError && <p className="form-error">{deleteError}</p>}
+        </div>
       </Modal>
     </div>
   );

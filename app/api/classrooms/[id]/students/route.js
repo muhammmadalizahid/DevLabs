@@ -16,11 +16,31 @@ export async function GET(req, { params }) {
 
   const url = new URL(req.url);
   const status = url.searchParams.get('status'); // pending | approved | rejected
+  const scope = url.searchParams.get('scope');
+  const classroomFilter = url.searchParams.get('classroomId');
+
+  let classroomIds = [resolvedParams.id];
+  if (scope === 'all') {
+    const { data: classrooms, error: classroomsError } = await supabaseAdmin
+      .from('classrooms')
+      .select('id')
+      .eq('teacher_id', user.id);
+
+    if (classroomsError) return NextResponse.json({ error: classroomsError.message }, { status: 500 });
+    classroomIds = (classrooms || []).map((item) => item.id);
+
+    if (classroomFilter && classroomFilter !== 'all') {
+      if (!classroomIds.includes(classroomFilter)) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      classroomIds = [classroomFilter];
+    }
+  }
 
   let query = supabaseAdmin
     .from('enrollments')
-    .select('*, users(id, name, email, avatar_url)')
-    .eq('classroom_id', resolvedParams.id)
+    .select('*, users(id, name, email, avatar_url), classrooms(id, name)')
+    .in('classroom_id', classroomIds.length ? classroomIds : ['00000000-0000-0000-0000-000000000000'])
     .order('requested_at', { ascending: false });
 
   if (status) query = query.eq('status', status);

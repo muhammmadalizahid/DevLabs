@@ -29,7 +29,7 @@ export async function GET() {
   // First, get all enrollments for this student
   const { data: enrollments, error: enrollError } = await supabaseAdmin
     .from('enrollments')
-    .select('id, status, classroom_id')
+    .select('id, status, classroom_id, requested_at')
     .eq('student_id', user.id);
   
   console.log('📋 Enrollments found:', { count: enrollments?.length, enrollError });
@@ -64,7 +64,8 @@ export async function GET() {
     return {
       ...classroom,
       enrollment_id: e.id,
-      enrollment_status: e.status
+      enrollment_status: e.status,
+      requested_at: e.requested_at,
     };
   }).filter(c => c.id); // Remove any null classrooms
   

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { useRequireRole } from '@/lib/hooks/useRequireRole';
 import Sidebar from '@/components/Sidebar';
@@ -8,11 +8,17 @@ import Modal from '@/components/Modal';
 import SQLEditor from '@/components/SQLEditor';
 import OutputTable from '@/components/OutputTable';
 import { DifficultyBadge } from '@/components/Badge';
+import { useUIFeedback } from '@/components/UIFeedback';
+import { getPersistentCache, setPersistentCache } from '@/lib/browser/persistentCache';
 import { Plus, Trash2, Play, Save } from 'lucide-react';
+
+const DATASET_LIST_CACHE_KEY = 'teacher:datasets:list'
+const DATASET_LIST_TTL_MS = 5 * 60 * 1000
 
 export default function TestEditPage() {
   const { id } = useParams();
   const { loading } = useRequireRole('teacher');
+  const { notify, confirmAction } = useUIFeedback();
   const [test, setTest] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [datasets, setDatasets] = useState([]);
@@ -23,19 +29,31 @@ export default function TestEditPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    if (!loading && id) { fetchTest(); fetchDatasets(); }
-  }, [loading, id]);
-
-  async function fetchTest() {
+  const fetchTest = useCallback(async () => {
     const res = await fetch(`/api/tests/${id}`);
     if (res.ok) { const d = await res.json(); setTest(d); setQuestions(d.questions || []); }
-  }
+  }, [id]);
 
-  async function fetchDatasets() {
+  const fetchDatasets = useCallback(async () => {
+    const cached = await getPersistentCache(DATASET_LIST_CACHE_KEY)
+    if (cached?.items?.length) setDatasets(cached.items)
+
     const res = await fetch('/api/datasets');
-    if (res.ok) setDatasets(await res.json());
-  }
+    if (res.ok) {
+      const items = await res.json()
+      setDatasets(items)
+      await setPersistentCache(DATASET_LIST_CACHE_KEY, { items }, DATASET_LIST_TTL_MS)
+    }
+  }, []);
+
+  useEffect(() => {
+    if (loading || !id) return undefined;
+    const timer = window.setTimeout(() => {
+      fetchTest();
+      fetchDatasets();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loading, id, fetchTest, fetchDatasets]);
 
   async function runReference() {
     if (!qForm.expected_query.trim() || !qForm.dataset_id) return;
@@ -70,9 +88,21 @@ export default function TestEditPage() {
   }
 
   async function deleteQuestion(qid) {
-    if (!confirm('Remove this question?')) return;
-    await fetch(`/api/tests/${id}/questions/${qid}`, { method: 'DELETE' });
+    const confirmed = await confirmAction({
+      title: 'Remove question?',
+      message: 'This question will be removed from the test. Existing grading data for it may no longer be usable.',
+      confirmLabel: 'Remove question',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+    const res = await fetch(`/api/tests/${id}/questions/${qid}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      notify(data.error || 'Failed to remove question.', { type: 'danger', title: 'Remove failed' });
+      return;
+    }
     setQuestions(qs => qs.filter(q => q.id !== qid));
+    notify('The question was removed.', { type: 'success', title: 'Question removed' });
   }
 
   if (loading || !test) return <div className="flex-center" style={{ height: '100vh' }}><div className="spinner" /></div>;
@@ -81,10 +111,9 @@ export default function TestEditPage() {
     <div className="page-layout">
       <Sidebar classroomId={test.classroom_id} />
       <div className="page-content">
-        <Navbar title={`Edit: ${test.title}`} actions={
+        <Navbar title={`Questions: ${test.title}`} actions={
           <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}><Plus size={16}/> Add Question</button>
         } />
-
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {questions.length === 0 && (
             <div className="card empty-state">
@@ -110,7 +139,10 @@ export default function TestEditPage() {
                       });
                       if (!res.ok) {
                         const data = await res.json();
-                        alert('Failed to update: ' + (data?.error || res.statusText));
+                        notify(`Failed to update: ${data?.error || res.statusText}`, {
+                          type: 'danger',
+                          title: 'Update failed',
+                        });
                         // revert
                         setQuestions(prev => prev.map(p => p.id === q.id ? { ...p, partial_grading: !enabled } : p));
                       }

@@ -1,7 +1,7 @@
 'use client';
 import { signIn, useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useRef } from 'react';
 import { Database, Users, BookOpen, Zap, CheckCircle, Code2 } from 'lucide-react';
 
 const features = [
@@ -16,19 +16,32 @@ const features = [
 export default function LandingPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const pathname = usePathname();
+  const redirectingRef = useRef(false);
 
   useEffect(() => {
-    if (status === 'loading') return;
+    if (status === 'loading' || redirectingRef.current) return;
     const bootstrapCookie = typeof document !== 'undefined'
       ? document.cookie.split('; ').find(entry => entry.startsWith('devlab_pending_role='))
       : null;
     const bootstrapRole = bootstrapCookie ? decodeURIComponent(bootstrapCookie.split('=')[1]) : null;
     const effectiveRole = session?.user?.role || bootstrapRole;
 
-    if (effectiveRole === 'teacher') router.replace('/teacher/dashboard');
-    else if (effectiveRole === 'student') router.replace('/student/dashboard');
-    else if (session && !effectiveRole) router.replace('/onboarding');
-  }, [session, status, router]);
+    if (effectiveRole === 'teacher' && pathname !== '/teacher/dashboard') {
+      redirectingRef.current = true;
+      router.replace('/teacher/dashboard');
+    } else if (effectiveRole === 'student' && pathname !== '/student/dashboard') {
+      redirectingRef.current = true;
+      router.replace('/student/dashboard');
+    } else if (session && !effectiveRole && pathname !== '/onboarding') {
+      redirectingRef.current = true;
+      router.replace('/onboarding');
+    }
+  }, [session, status, router, pathname]);
+
+  useEffect(() => {
+    redirectingRef.current = false;
+  }, [pathname]);
 
   return (
     <div className="landing">

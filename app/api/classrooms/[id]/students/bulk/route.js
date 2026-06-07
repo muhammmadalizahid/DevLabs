@@ -13,10 +13,32 @@ export async function POST(req, { params }) {
   if (!classroom || user?.role !== 'teacher' || classroom.teacher_id !== user.id)
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
+  const url = new URL(req.url);
+  const scope = url.searchParams.get('scope');
+  const classroomFilter = url.searchParams.get('classroomId');
+  let classroomIds = [resolvedParams.id];
+
+  if (scope === 'all') {
+    const { data: classrooms, error: classroomsError } = await supabaseAdmin
+      .from('classrooms')
+      .select('id')
+      .eq('teacher_id', user.id);
+
+    if (classroomsError) return NextResponse.json({ error: classroomsError.message }, { status: 500 });
+    classroomIds = (classrooms || []).map((item) => item.id);
+
+    if (classroomFilter && classroomFilter !== 'all') {
+      if (!classroomIds.includes(classroomFilter)) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      classroomIds = [classroomFilter];
+    }
+  }
+
   const { data, error } = await supabaseAdmin
     .from('enrollments')
     .update({ status: 'approved', approved_at: new Date().toISOString() })
-    .eq('classroom_id', resolvedParams.id)
+    .in('classroom_id', classroomIds.length ? classroomIds : ['00000000-0000-0000-0000-000000000000'])
     .eq('status', 'pending')
     .select();
 

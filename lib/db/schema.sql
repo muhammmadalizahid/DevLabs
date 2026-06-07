@@ -27,7 +27,30 @@ create table if not exists datasets (
   seed_sql     text not null,
   storage_path text,
   table_name   text,
+  status       text default 'READY',
+  table_prefix text,
+  table_count  int default 0,
+  row_count    int default 0,
+  tidb_database_name text,
+  error_message text,
+  version_hash text,
+  metadata_cached_at timestamptz,
   created_at   timestamptz default now()
+);
+
+create table if not exists dataset_tables (
+  id uuid primary key default gen_random_uuid(),
+  dataset_id uuid not null references datasets(id) on delete cascade,
+  original_table_name text not null,
+  physical_table_name text not null,
+  columns_json jsonb default '[]'::jsonb,
+  row_count int default 0,
+  sample_rows_json jsonb default '[]'::jsonb,
+  table_size_estimate bigint default 0,
+  last_refreshed_at timestamptz default now(),
+  created_at timestamptz default now(),
+  unique (dataset_id, original_table_name),
+  unique (physical_table_name)
 );
 
 -- ── Classrooms ───────────────────────────────────────────────
@@ -59,7 +82,9 @@ create table if not exists tests (
   title            text not null,
   description      text,
   time_limit_mins  int,
+  due_at           timestamptz,
   is_published     boolean default false,
+  clone_group_id    uuid default gen_random_uuid(),
   created_at       timestamptz default now()
 );
 
@@ -74,7 +99,8 @@ create table if not exists questions (
   order_sensitive  boolean default false,
   points           int default 1,
   partial_grading  boolean default false,
-  position         int not null
+  position         int not null,
+  question_group_id uuid default gen_random_uuid()
 );
 
 -- ── Submissions ──────────────────────────────────────────────
@@ -99,7 +125,8 @@ create table if not exists submission_answers (
   actual_output  jsonb,
   is_correct     boolean,
   score          int default 0,
-  evaluated_at   timestamptz
+  evaluated_at   timestamptz,
+  unique (submission_id, question_id)
 );
 
 -- ── Practice Problems ────────────────────────────────────────
@@ -115,13 +142,31 @@ create table if not exists practice_problems (
   position         int
 );
 
+-- ── Plagiarism Flags ─────────────────────────────────────────
+create table if not exists plagiarism_flags (
+  id              serial primary key,
+  test_id         uuid not null references tests(id) on delete cascade,
+  a_submission_id uuid not null references submissions(id) on delete cascade,
+  b_submission_id uuid not null references submissions(id) on delete cascade,
+  status          varchar(32) not null default 'flagged',
+  reviewer_id     uuid references users(id) on delete set null,
+  note            text,
+  score           numeric,
+  created_at      timestamptz default now(),
+  reviewed_at     timestamptz,
+  unique (test_id, least(a_submission_id::text, b_submission_id::text), greatest(a_submission_id::text, b_submission_id::text))
+);
+
 -- ── Indexes ──────────────────────────────────────────────────
 create index if not exists idx_enrollments_classroom  on enrollments (classroom_id, status);
 create index if not exists idx_enrollments_student    on enrollments (student_id);
 create index if not exists idx_submissions_student    on submissions (student_id, test_id);
 create index if not exists idx_submissions_test       on submissions (test_id);
 create index if not exists idx_questions_test         on questions (test_id, position);
+create index if not exists idx_tests_clone_group      on tests (clone_group_id);
+create index if not exists idx_questions_question_group on questions (question_group_id);
 create index if not exists idx_answers_submission     on submission_answers (submission_id);
+create index if not exists idx_plagiarism_flags_test  on plagiarism_flags (test_id);
 
 -- ── Row Level Security ───────────────────────────────────────
 alter table users              enable row level security;
@@ -133,6 +178,7 @@ alter table submissions        enable row level security;
 alter table submission_answers enable row level security;
 alter table datasets           enable row level security;
 alter table practice_problems  enable row level security;
+alter table plagiarism_flags   enable row level security;
 
 -- NOTE: All writes go through server-side API routes using the
 -- service role key which bypasses RLS. The policies below
@@ -147,3 +193,4 @@ create policy "allow_service_role" on submissions for all using (true);
 create policy "allow_service_role" on submission_answers for all using (true);
 create policy "allow_service_role" on datasets for all using (true);
 create policy "allow_service_role" on practice_problems for all using (true);
+create policy "allow_service_role" on plagiarism_flags for all using (true);

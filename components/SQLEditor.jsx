@@ -6,10 +6,26 @@ const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false 
 
 export default function SQLEditor({ value, onChange, height = 240, readOnly = false, theme }) {
   const editorRef = useRef(null);
+  const monacoRef = useRef(null);
 
-  function handleMount(editor) {
+  function handleMount(editor, monaco) {
     editorRef.current = editor;
+    monacoRef.current = monaco;
+    // Re-measure once mounted to reduce cursor drift issues.
+    monaco.editor.remeasureFonts();
+    editor.layout();
   }
+
+  useEffect(() => {
+    if (!editorRef.current || typeof document === 'undefined' || !document.fonts?.ready) return;
+    let cancelled = false;
+    document.fonts.ready.then(() => {
+      if (cancelled || !editorRef.current) return;
+      monacoRef.current?.editor?.remeasureFonts?.();
+      editorRef.current.layout();
+    });
+    return () => { cancelled = true; };
+  }, [theme, height]);
 
   // Detect system/app theme
   const isDark =
@@ -33,8 +49,11 @@ export default function SQLEditor({ value, onChange, height = 240, readOnly = fa
         options={{
           minimap: { enabled: false },
           fontSize: 14,
-          fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+          fontFamily: "Consolas, 'Courier New', monospace",
+          fontLigatures: false,
           lineNumbers: 'on',
+          lineHeight: 22,
+          letterSpacing: 0,
           scrollBeyondLastLine: false,
           wordWrap: 'on',
           automaticLayout: true,

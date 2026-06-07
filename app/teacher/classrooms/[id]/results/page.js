@@ -19,7 +19,13 @@ export default function ResultsPage() {
 
   useEffect(() => {
     if (!loading && id) {
-      fetch(`/api/tests?classroomId=${id}`).then(r => r.json()).then(d => { setTests(d); if (d[0]) setSelectedTest(d[0].id); });
+      fetch(`/api/tests?classroomId=${id}`)
+        .then(r => r.json())
+        .then(d => {
+          const list = Array.isArray(d) ? d : [];
+          setTests(list);
+          setSelectedTest(list[0]?.id || '');
+        });
     }
   }, [loading, id]);
 
@@ -48,14 +54,17 @@ export default function ResultsPage() {
     <div className="page-layout">
       <Sidebar classroomId={id} />
       <div className="page-content">
-        <Navbar title="Results" actions={selectedTest && <>
+        <Navbar title="Results" actions={selectedTest ? <>
           <a href={`/api/export/csv/${selectedTest}`} className="btn btn-secondary btn-sm"><Download size={14}/> CSV</a>
           <a href={`/api/export/excel/${selectedTest}`} className="btn btn-secondary btn-sm"><Download size={14}/> Excel</a>
-        </>} />
+        </> : null} />
 
         <div className="flex-gap" style={{ marginBottom: 24, flexWrap: 'wrap' }}>
           <select className="form-input" style={{ width: 'auto', minWidth: 220 }}
-            value={selectedTest} onChange={e => setSelectedTest(e.target.value)}>
+            value={selectedTest || '__no_tests__'} onChange={e => setSelectedTest(e.target.value === '__no_tests__' ? '' : e.target.value)}>
+            <option value="__no_tests__" disabled>
+              {tests.length > 0 ? 'Select a test' : 'No tests available yet'}
+            </option>
             {tests.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
           </select>
           <select className="form-input" style={{ width: 'auto' }}
@@ -68,7 +77,9 @@ export default function ResultsPage() {
 
         {fetching
           ? <div className="skeleton" style={{ height: 300, borderRadius: 'var(--radius-lg)' }} />
-          : results.length === 0
+          : !selectedTest
+            ? <div className="card empty-state"><BarChart2 size={40} /><h3>No tests yet</h3><p>Create a test and publish it to start seeing results here.</p></div>
+            : results.length === 0
             ? <div className="card empty-state"><BarChart2 size={40} /><h3>No results yet</h3><p>Results will appear here once students submit.</p></div>
             : <div className="card p-0"><DataTable columns={columns} data={results} emptyMessage="No results found" /></div>
         }
