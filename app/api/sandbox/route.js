@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server'
-import { createSandbox, closeSandbox } from '@/lib/sandbox/createSandbox'
 import { validateQuery } from '@/lib/sandbox/validateQuery'
 import { importDataset } from '@/lib/sandbox/importDataset'
 import { gradeQuery, detailedGradeQuery } from '@/lib/sandbox/gradeQuery'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 /**
  * POST /api/sandbox
@@ -55,6 +57,8 @@ export async function POST(req) {
     validateQuery(query)
 
     // Create isolated sandbox
+    // Keep the native sqlite3 dependency out of build-time route evaluation on Vercel.
+    const { createSandbox } = await import('@/lib/sandbox/createSandbox')
     db = await createSandbox()
 
     // Import dataset into sandbox
@@ -109,6 +113,7 @@ export async function POST(req) {
   } finally {
     // Clean up sandbox
     if (db) {
+      const { closeSandbox } = await import('@/lib/sandbox/createSandbox')
       await closeSandbox(db)
     }
   }
